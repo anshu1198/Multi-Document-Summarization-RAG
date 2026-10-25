@@ -1,0 +1,23 @@
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Secrets
+.env
+.env.*
+
+# Generated data and embeddings
+data/processed/
+data/vector_db/
+data/raw_documents/
+
+# Results generated locally
+results/
+
+# Editor and OS files
+.vscode/
+.DS_Store
+Thumbs.db
