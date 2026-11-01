@@ -1,7 +1,7 @@
 
 """
 Vector Store Module
-Project: Multi-Document Summarization with Context Awareness using RAG
+Multi-Document Summarization with Context Awareness using RAG.
 
 Stores document chunks and their precomputed embeddings in ChromaDB.
 """
@@ -20,7 +20,7 @@ from config import (
 
 
 def create_vector_store(chunks, embeddings, database_path=None):
-    """Validate and store chunks and embeddings in ChromaDB."""
+    """Validate and store document chunks and embeddings."""
     if not isinstance(chunks, list) or not chunks:
         raise ValueError("Chunks must be a non-empty list.")
 
@@ -38,9 +38,13 @@ def create_vector_store(chunks, embeddings, database_path=None):
     if embeddings.shape[1] == 0:
         raise ValueError("Embedding vectors cannot be empty.")
 
+    if not np.isfinite(embeddings).all():
+        raise ValueError("Embeddings contain invalid numerical values.")
+
     ids = []
     documents = []
     metadatas = []
+    seen_ids = set()
 
     for index, chunk in enumerate(chunks):
         if not isinstance(chunk, dict):
@@ -52,6 +56,17 @@ def create_vector_store(chunks, embeddings, database_path=None):
                 f"Chunk {index} must contain non-empty text."
             )
 
+        original_id = str(
+            chunk.get("chunk_id") or f"chunk_{index}"
+        )
+
+        # ChromaDB IDs must be unique.
+        if original_id in seen_ids:
+            raise ValueError(
+                f"Duplicate chunk ID found: {original_id}"
+            )
+        seen_ids.add(original_id)
+
         try:
             page_number = int(chunk.get("page_number", 0))
         except (TypeError, ValueError) as exc:
@@ -59,12 +74,16 @@ def create_vector_store(chunks, embeddings, database_path=None):
                 f"Chunk {index} has an invalid page number."
             ) from exc
 
-        ids.append(f"chunk_{index}")
+        document_name = str(
+            chunk.get("document") or "unknown_document"
+        )
+
+        ids.append(original_id)
         documents.append(text)
         metadatas.append({
-            "document": str(chunk.get("document", "unknown_document")),
+            "document": document_name,
             "page_number": page_number,
-            "chunk_id": str(chunk.get("chunk_id", f"chunk_{index}")),
+            "chunk_id": original_id,
         })
 
     path = Path(database_path or VECTOR_DB_DIR)
@@ -77,18 +96,20 @@ def create_vector_store(chunks, embeddings, database_path=None):
         metadata={"hnsw:space": "cosine"},
     )
 
-    # Remove previous records to avoid retaining outdated chunks.
-    existing_ids = collection.get(include=[])["ids"]
-
-    if existing_ids:
-        collection.delete(ids=existing_ids)
-
+    # Upsert validated records using stable chunk IDs.
+    # Remove stale records after writing the current dataset.
     collection.upsert(
         ids=ids,
         documents=documents,
         embeddings=embeddings.tolist(),
         metadatas=metadatas,
     )
+
+    existing_ids = collection.get(include=[])["ids"]
+    stale_ids = [item for item in existing_ids if item not in seen_ids]
+
+    if stale_ids:
+        collection.delete(ids=stale_ids)
 
     return collection
 

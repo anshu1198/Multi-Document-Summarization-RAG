@@ -4,7 +4,7 @@ Reranking Module
 Multi-Document Summarization with Context Awareness using RAG.
 
 Ranks retrieved chunks by query-to-chunk cosine similarity.
-Uses embeddings already returned by ChromaDB.
+Uses embeddings returned by ChromaDB.
 """
 
 import numpy as np
@@ -16,7 +16,9 @@ def cosine_similarity(vector_a, vector_b):
     vector_b = np.asarray(vector_b, dtype=np.float32).reshape(-1)
 
     if vector_a.shape != vector_b.shape:
-        raise ValueError("Both vectors must have the same dimensions.")
+        raise ValueError(
+            "Query and chunk embeddings must have the same dimensions."
+        )
 
     norm_a = np.linalg.norm(vector_a)
     norm_b = np.linalg.norm(vector_b)
@@ -32,6 +34,9 @@ def rerank_results(query_embedding, results, top_k=None):
     if not isinstance(results, dict):
         raise TypeError("results must be a ChromaDB result dictionary.")
 
+    if top_k is not None and top_k < 0:
+        raise ValueError("top_k cannot be negative.")
+
     ids = results.get("ids")
     documents = results.get("documents")
     metadatas = results.get("metadatas")
@@ -45,9 +50,7 @@ def rerank_results(query_embedding, results, top_k=None):
     metadatas = metadatas[0] if metadatas and metadatas[0] else []
 
     if embeddings is None or len(embeddings) == 0:
-        raise ValueError(
-            "ChromaDB results must include embeddings."
-        )
+        raise ValueError("ChromaDB results must include embeddings.")
 
     vectors = embeddings[0]
 
@@ -56,9 +59,6 @@ def rerank_results(query_embedding, results, top_k=None):
             "The number of result IDs does not match the number "
             "of returned embeddings."
         )
-
-    if top_k is not None and top_k < 0:
-        raise ValueError("top_k cannot be negative.")
 
     query_embedding = np.asarray(
         query_embedding, dtype=np.float32
@@ -72,30 +72,28 @@ def rerank_results(query_embedding, results, top_k=None):
         if vector is None:
             continue
 
+        score = cosine_similarity(query_embedding, vector)
+
+        metadata = (
+            metadatas[index]
+            if index < len(metadatas) and metadatas[index]
+            else {}
+        )
+
         ranked_chunks.append({
-            "chunk_id": chunk_id,
+            "chunk_id": str(chunk_id),
             "text": (
                 documents[index]
-                if index < len(documents)
+                if index < len(documents) and documents[index]
                 else ""
             ),
-            "metadata": (
-                metadatas[index]
-                if index < len(metadatas) and metadatas[index]
-                else {}
-            ),
-            "similarity_score": cosine_similarity(
-                query_embedding, vector
-            )
+            "metadata": metadata,
+            "similarity_score": score,
         })
 
     ranked_chunks.sort(
         key=lambda chunk: chunk["similarity_score"],
-        reverse=True
+        reverse=True,
     )
 
-    return (
-        ranked_chunks
-        if top_k is None
-        else ranked_chunks[:top_k]
-    )
+    return ranked_chunks if top_k is None else ranked_chunks[:top_k]

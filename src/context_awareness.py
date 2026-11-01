@@ -4,7 +4,7 @@ Context Awareness Module
 Multi-Document Summarization with Context Awareness using RAG.
 
 Analyzes lexical relationships between retrieved chunks.
-This module does not independently detect contradictions.
+Lexical overlap is not proof of semantic similarity or contradiction.
 """
 
 import re
@@ -44,7 +44,7 @@ def normalize_text(text):
 
 
 def calculate_similarity(text1, text2):
-    """Calculate Jaccard lexical similarity between two texts."""
+    """Calculate Jaccard similarity between two texts."""
     words1 = set(normalize_text(text1))
     words2 = set(normalize_text(text2))
 
@@ -55,7 +55,7 @@ def calculate_similarity(text1, text2):
 
 
 def identify_shared_terms(text1, text2, limit=10):
-    """Return meaningful terms shared by two texts."""
+    """Return frequently occurring terms shared by two texts."""
     words1 = Counter(normalize_text(text1))
     words2 = Counter(normalize_text(text2))
     shared = words1.keys() & words2.keys()
@@ -86,7 +86,7 @@ def _get_chunk_text(chunk):
 
 
 def _get_chunk_metadata(chunk, index):
-    """Extract source and page metadata from a chunk."""
+    """Extract chunk ID, source document, and page number."""
     if not isinstance(chunk, dict):
         return {
             "chunk_id": str(index),
@@ -98,28 +98,34 @@ def _get_chunk_metadata(chunk, index):
     if not isinstance(metadata, dict):
         metadata = {}
 
+    chunk_id = (
+        chunk.get("chunk_id")
+        or chunk.get("id")
+        or metadata.get("chunk_id")
+        or str(index)
+    )
+
+    source = (
+        chunk.get("source")
+        or chunk.get("source_file")
+        or chunk.get("document")
+        or metadata.get("source")
+        or metadata.get("source_file")
+        or metadata.get("filename")
+        or metadata.get("document")
+    )
+
+    page_number = (
+        chunk.get("page_number")
+        or chunk.get("page")
+        or metadata.get("page_number")
+        or metadata.get("page")
+    )
+
     return {
-        "chunk_id": str(
-            chunk.get("chunk_id")
-            or chunk.get("id")
-            or metadata.get("chunk_id")
-            or index
-        ),
-        "source": (
-            chunk.get("source")
-            or chunk.get("source_file")
-            or chunk.get("document")
-            or metadata.get("source")
-            or metadata.get("source_file")
-            or metadata.get("filename")
-            or metadata.get("document")
-        ),
-        "page_number": (
-            chunk.get("page_number")
-            or chunk.get("page")
-            or metadata.get("page_number")
-            or metadata.get("page")
-        )
+        "chunk_id": str(chunk_id),
+        "source": source,
+        "page_number": page_number
     }
 
 
@@ -132,23 +138,37 @@ def compare_chunks(chunk1, chunk2):
     return {
         "similarity": round(similarity, 4),
         "shared_terms": identify_shared_terms(text1, text2),
-        "related_by_word_overlap": similarity >= 0.10 and similarity > 0
+        "related_by_word_overlap": (
+            similarity >= 0.10 and similarity > 0
+        ),
+        "relationship_type": (
+            "lexical_overlap"
+            if similarity >= 0.10 and similarity > 0
+            else "weak_or_no_lexical_overlap"
+        )
     }
 
 
 def analyze_context(chunks, similarity_threshold=0.10):
     """
-    Identify lexical relationships and groups among retrieved chunks.
+    Analyze lexical relationships between retrieved chunks.
 
-    This does not establish semantic equivalence or detect contradictions.
+    Builds a graph where chunks are nodes and sufficiently similar
+    pairs are edges. Connected components form context groups.
+
+    This method does not independently detect contradictions,
+    semantic equivalence, or factual agreement.
     """
     if not 0 <= similarity_threshold <= 1:
-        raise ValueError("similarity_threshold must be between 0 and 1.")
+        raise ValueError(
+            "similarity_threshold must be between 0 and 1."
+        )
 
     records = []
 
     for index, chunk in enumerate(chunks):
         text = _get_chunk_text(chunk)
+
         records.append({
             **_get_chunk_metadata(chunk, index),
             "text": text,
@@ -159,11 +179,28 @@ def analyze_context(chunks, similarity_threshold=0.10):
     adjacency = defaultdict(set)
 
     for i, j in combinations(range(len(records)), 2):
-        left, right = records[i], records[j]
+        left = records[i]
+        right = records[j]
 
-        similarity = calculate_similarity(left["text"], right["text"])
+        union = left["terms"] | right["terms"]
+        intersection = left["terms"] & right["terms"]
+
+        similarity = (
+            len(intersection) / len(union)
+            if union else 0.0
+        )
 
         if similarity >= similarity_threshold and similarity > 0:
+            shared_terms = sorted(
+                intersection,
+                key=lambda term: (
+                    left["text"].lower().count(term)
+                    + right["text"].lower().count(term),
+                    term
+                ),
+                reverse=True
+            )[:10]
+
             relationships.append({
                 "chunk_id_1": left["chunk_id"],
                 "chunk_id_2": right["chunk_id"],
@@ -172,16 +209,18 @@ def analyze_context(chunks, similarity_threshold=0.10):
                 "page_1": left["page_number"],
                 "page_2": right["page_number"],
                 "similarity": round(similarity, 4),
-                "shared_terms": identify_shared_terms(
-                    left["text"], right["text"]
-                ),
-                "relationship_type": "lexical_overlap"
+                "shared_terms": shared_terms,
+                "relationship_type": "lexical_overlap",
+                "interpretation": (
+                    "The chunks share vocabulary; their semantic "
+                    "relationship requires further verification."
+                )
             })
 
             adjacency[i].add(j)
             adjacency[j].add(i)
 
-    # Find connected groups of related chunks.
+    # Find connected components of related chunks.
     visited = set()
     context_groups = []
 
@@ -224,7 +263,7 @@ def analyze_context(chunks, similarity_threshold=0.10):
             "chunk_id": record["chunk_id"],
             "source": record["source"],
             "page_number": record["page_number"],
-            "word_count": len(record["terms"]),
+            "word_count": len(normalize_text(record["text"])),
             "text": record["text"]
         }
         for record in records

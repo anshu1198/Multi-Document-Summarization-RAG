@@ -1,7 +1,7 @@
 
 """
 Text Chunking Module
-Project: Multi-Document Summarization with Context Awareness using RAG
+Multi-Document Summarization with Context Awareness using RAG.
 
 Creates overlapping text chunks from cleaned document pages.
 Preserves document names, page numbers, and unique chunk IDs.
@@ -15,6 +15,9 @@ from config import PROCESSED_DIR, CHUNKS_DIR
 
 def chunk_text(text, max_words=180, overlap_words=30):
     """Split text into overlapping word chunks."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string.")
+
     if max_words <= 0:
         raise ValueError("max_words must be greater than 0.")
 
@@ -60,28 +63,44 @@ def create_chunks(input_file, output_folder=CHUNKS_DIR):
     all_chunks = []
     chunk_number = 0
 
-    for page in pages:
-        if not isinstance(page, dict):
-            continue
+    document_stem = input_file.stem.removesuffix("_cleaned")
 
-        page_text = page.get("text", "").strip()
+    for page_index, page in enumerate(pages, start=1):
+        if not isinstance(page, dict):
+            raise ValueError(
+                f"Page {page_index} in {input_file.name} "
+                "must be a dictionary."
+            )
+
+        page_text = page.get("text", "")
+
+        if not isinstance(page_text, str):
+            raise ValueError(
+                f"Text on page {page_index} must be a string."
+            )
+
+        page_text = page_text.strip()
 
         if not page_text:
             continue
 
-        for chunk in chunk_text(page_text):
+        try:
+            page_number = int(page.get("page_number", page_index))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"Invalid page number on page {page_index}."
+            ) from exc
+
+        for text_chunk in chunk_text(page_text):
             chunk_number += 1
 
             all_chunks.append({
-                "document": page.get(
-                    "document",
-                    input_file.stem.removesuffix("_cleaned"),
-                ),
-                "page_number": page.get("page_number", 0),
+                "document": page.get("document", document_stem),
+                "page_number": page_number,
                 "chunk_id": (
-                    f"{input_file.stem}_chunk_{chunk_number}"
+                    f"{document_stem}_chunk_{chunk_number}"
                 ),
-                "text": chunk,
+                "text": text_chunk,
             })
 
     output_folder.mkdir(parents=True, exist_ok=True)

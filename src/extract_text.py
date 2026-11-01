@@ -1,7 +1,7 @@
 
 """
 PDF Text Extraction Module
-Project: Multi-Document Summarization with Context Awareness using RAG
+Multi-Document Summarization with Context Awareness using RAG.
 """
 
 import json
@@ -13,8 +13,15 @@ from config import RAW_DOCUMENTS_DIR, PROCESSED_DIR
 
 
 def extract_pdf_text(pdf_path):
-    """Extract text from a PDF, preserving page numbers and source name."""
+    """Extract PDF text while preserving page and source metadata."""
     pdf_path = Path(pdf_path)
+
+    if not pdf_path.exists():
+        raise FileNotFoundError(f"PDF file not found: {pdf_path}")
+
+    if pdf_path.suffix.lower() != ".pdf":
+        raise ValueError(f"Expected a PDF file: {pdf_path}")
+
     pages = []
 
     with pymupdf.open(str(pdf_path)) as pdf:
@@ -41,7 +48,15 @@ def extract_all_pdfs(
             f"PDF input folder does not exist: {pdf_folder}"
         )
 
-    pdf_files = sorted(pdf_folder.glob("*.pdf"))
+    if not pdf_folder.is_dir():
+        raise NotADirectoryError(
+            f"PDF input path is not a directory: {pdf_folder}"
+        )
+
+    pdf_files = sorted(
+        path for path in pdf_folder.iterdir()
+        if path.is_file() and path.suffix.lower() == ".pdf"
+    )
 
     if not pdf_files:
         print(f"No PDF files found in {pdf_folder}")
@@ -74,6 +89,12 @@ def extract_all_pdfs(
             print(f"Pages without extractable text: {empty_pages}")
             print(f"Saved to: {output_path}")
 
+            if empty_pages:
+                print(
+                    "Note: Some pages may require OCR if they "
+                    "contain scanned images."
+                )
+
         except (OSError, ValueError, RuntimeError) as exc:
             print(f"\nFailed to extract {pdf_path.name}: {exc}")
 
@@ -81,6 +102,7 @@ def extract_all_pdfs(
         f"\nExtraction completed for "
         f"{len(extracted_files)} PDF(s)."
     )
+
     return extracted_files
 
 

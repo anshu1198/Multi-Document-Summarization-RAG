@@ -1,7 +1,7 @@
 
 """
 Embedding Generation Module
-Project: Multi-Document Summarization with Context Awareness using RAG
+Multi-Document Summarization with Context Awareness using RAG.
 
 Generates embeddings for cleaned chunks from multiple documents.
 Saves combined chunks and embeddings in exactly the same order.
@@ -27,20 +27,35 @@ def load_embedding_model():
 def generate_embeddings(texts, model, batch_size=4):
     """Generate embeddings in small batches."""
     if not texts:
-        raise ValueError("Cannot generate embeddings for an empty text list.")
+        raise ValueError(
+            "Cannot generate embeddings for an empty text list."
+        )
 
-    return model.encode(
+    embeddings = model.encode(
         texts,
         batch_size=batch_size,
         show_progress_bar=True,
         convert_to_numpy=True,
     )
 
+    embeddings = np.asarray(embeddings, dtype=np.float32)
+
+    if embeddings.ndim != 2:
+        raise ValueError("Generated embeddings must be a 2D array.")
+
+    if len(embeddings) != len(texts):
+        raise ValueError(
+            "Generated embedding count does not match text count."
+        )
+
+    if not np.isfinite(embeddings).all():
+        raise ValueError("Generated embeddings contain invalid values.")
+
+    return embeddings
+
 
 def main():
-    """Generate embeddings for chunks created from cleaned documents."""
-
-    # Select only chunks generated from *_cleaned.json files.
+    """Generate embeddings for cleaned document chunks."""
     chunk_files = sorted(
         CHUNKS_DIR.glob("*_cleaned_chunks.json")
     )
@@ -48,7 +63,7 @@ def main():
     if not chunk_files:
         raise FileNotFoundError(
             f"No cleaned chunk files found in {CHUNKS_DIR}. "
-            "Run preprocess.py and chunking.py first."
+            "Run preprocessing and chunking first."
         )
 
     all_chunks = []
@@ -62,41 +77,47 @@ def main():
                 f"Expected a list of chunks in {chunk_file.name}."
             )
 
-        print(f"Loaded {len(chunks)} chunks from {chunk_file.name}")
+        print(
+            f"Loaded {len(chunks)} chunks from {chunk_file.name}"
+        )
         all_chunks.extend(chunks)
 
     if not all_chunks:
         raise ValueError("No text chunks found.")
 
+    seen_ids = set()
+
     for index, chunk in enumerate(all_chunks):
         if not isinstance(chunk, dict):
-            raise ValueError(f"Chunk {index} is not a dictionary.")
+            raise ValueError(
+                f"Chunk {index} is not a dictionary."
+            )
 
-        if not isinstance(chunk.get("text"), str) or not chunk["text"].strip():
+        text = chunk.get("text")
+        if not isinstance(text, str) or not text.strip():
             raise ValueError(
                 f"Chunk {index} has missing or empty text."
             )
 
-    # Prevent duplicate chunk IDs across documents.
-    chunk_ids = [chunk.get("chunk_id") for chunk in all_chunks]
-    if len(chunk_ids) != len(set(chunk_ids)):
-        raise ValueError(
-            "Duplicate chunk IDs found. Regenerate chunks before embedding."
-        )
+        chunk_id = chunk.get("chunk_id")
+
+        if not isinstance(chunk_id, str) or not chunk_id.strip():
+            raise ValueError(
+                f"Chunk {index} is missing a valid chunk_id."
+            )
+
+        if chunk_id in seen_ids:
+            raise ValueError(
+                f"Duplicate chunk ID found: {chunk_id}"
+            )
+
+        seen_ids.add(chunk_id)
 
     texts = [chunk["text"] for chunk in all_chunks]
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Save combined chunks in the same order as their embeddings.
     combined_chunks_file = PROCESSED_DIR / "all_chunks.json"
-
-    with combined_chunks_file.open("w", encoding="utf-8") as file:
-        json.dump(
-            all_chunks,
-            file,
-            ensure_ascii=False,
-            indent=2,
-        )
+    embeddings_file = PROCESSED_DIR / "embeddings.npy"
 
     print(f"\nTotal cleaned chunks: {len(texts)}")
     print(f"Loading embedding model: {EMBEDDING_MODEL_NAME}")
@@ -110,19 +131,22 @@ def main():
         batch_size=4,
     )
 
-    if embeddings.ndim != 2 or len(embeddings) != len(all_chunks):
-        raise ValueError(
-            "Generated embeddings do not match the chunk count."
+    # Save the outputs only after generation and validation succeed.
+    with combined_chunks_file.open("w", encoding="utf-8") as file:
+        json.dump(
+            all_chunks,
+            file,
+            ensure_ascii=False,
+            indent=2,
         )
 
-    output_file = PROCESSED_DIR / "embeddings.npy"
-    np.save(output_file, embeddings)
+    np.save(embeddings_file, embeddings)
 
     print("\nEmbedding generation completed successfully!")
-    print(f"Total chunks: {len(texts)}")
+    print(f"Total chunks: {len(all_chunks)}")
     print(f"Embedding shape: {embeddings.shape}")
     print(f"Combined chunks: {combined_chunks_file}")
-    print(f"Embeddings: {output_file}")
+    print(f"Embeddings: {embeddings_file}")
 
 
 if __name__ == "__main__":

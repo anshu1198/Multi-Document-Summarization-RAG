@@ -1,7 +1,7 @@
 
 """
 Text Preprocessing Module
-Project: Multi-Document Summarization with Context Awareness using RAG
+Multi-Document Summarization with Context Awareness using RAG.
 
 Cleans extracted document text before chunking and embedding.
 Preserves document names and page numbers.
@@ -94,33 +94,43 @@ def preprocess_json(input_path, output_path):
 
 
 def main():
-    """Preprocess all extracted document JSON files."""
+    """Preprocess original extracted document JSON files."""
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
     json_files = sorted(
         file for file in PROCESSED_DIR.glob("*.json")
-        if not file.name.endswith("_chunks.json")
+        if not file.stem.endswith("_cleaned")
+        and not file.stem.endswith("_chunks")
         and file.name != "all_chunks.json"
     )
 
     if not json_files:
-        print("No extracted document JSON files found.")
+        print("No original extracted document JSON files found.")
         return
 
     for input_file in json_files:
-        # Save cleaned text separately to avoid overwriting extraction output.
         output_file = input_file.with_name(
             f"{input_file.stem}_cleaned.json"
         )
 
         try:
-            cleaned_pages = preprocess_json(input_file, output_file)
+            cleaned_pages = preprocess_json(
+                input_file,
+                output_file,
+            )
+
             print(
                 f"Processed {input_file.name}: "
                 f"{len(cleaned_pages)} pages"
             )
             print(f"Saved to: {output_file}")
-        except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+
+        except (
+            OSError,
+            ValueError,
+            TypeError,
+            json.JSONDecodeError,
+        ) as exc:
             print(f"Could not process {input_file.name}: {exc}")
 
 

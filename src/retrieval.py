@@ -1,14 +1,14 @@
 
 """
 Retrieval Module
-Project: Multi-Document Summarization with Context Awareness using RAG
+Multi-Document Summarization with Context Awareness using RAG.
 
 Pipeline:
 1. Load the sentence embedding model.
 2. Retrieve candidate chunks from ChromaDB.
 3. Rerank candidates using cosine similarity.
 4. Analyze lexical relationships between selected chunks.
-5. Return text, source metadata, and ranking scores.
+5. Return ranked chunks and context analysis.
 """
 
 from pathlib import Path
@@ -34,7 +34,7 @@ VECTOR_DB_PATH = Path(VECTOR_DB_DIR)
 
 
 def load_embedding_model(model_name=MODEL_NAME):
-    """Load the embedding model used for document embeddings."""
+    """Load the sentence embedding model."""
     return SentenceTransformer(model_name)
 
 
@@ -42,7 +42,7 @@ def load_collection(
     db_path=VECTOR_DB_PATH,
     collection_name=COLLECTION_NAME,
 ):
-    """Connect to the existing persistent ChromaDB collection."""
+    """Connect to the persistent ChromaDB collection."""
     db_path = Path(db_path)
 
     if not db_path.exists():
@@ -76,12 +76,7 @@ def retrieve_chunks(
     top_k=DEFAULT_TOP_K,
     candidate_k=DEFAULT_CANDIDATE_K,
 ):
-    """
-    Retrieve candidate chunks, rerank them, and analyze context.
-
-    Returns a list of chunk dictionaries with text, metadata,
-    cosine similarity, distance, and lexical relationship details.
-    """
+    """Retrieve and rerank relevant chunks."""
     if not isinstance(question, str) or not question.strip():
         raise ValueError("Question cannot be empty.")
 
@@ -118,6 +113,7 @@ def retrieve_chunks(
     documents = (results.get("documents") or [[]])[0]
     metadatas = (results.get("metadatas") or [[]])[0]
     distances = (results.get("distances") or [[]])[0]
+    embeddings = results.get("embeddings")
 
     if not ids:
         return []
@@ -126,7 +122,7 @@ def retrieve_chunks(
         "ids": [ids],
         "documents": [documents],
         "metadatas": [metadatas],
-        "embeddings": results.get("embeddings"),
+        "embeddings": embeddings,
     }
 
     ranked = rerank_results(
@@ -144,31 +140,6 @@ def retrieve_chunks(
     for chunk in ranked:
         chunk["distance"] = distance_by_id.get(chunk["chunk_id"])
 
-    context_analysis = analyze_context(
-        ranked,
-        similarity_threshold=CONTEXT_SIMILARITY_THRESHOLD,
-    )
-
-    relationships = context_analysis["relationships"]
-    related_chunk_ids = set()
-
-    for relationship in relationships:
-        related_chunk_ids.add(relationship["chunk_id_1"])
-        related_chunk_ids.add(relationship["chunk_id_2"])
-
-    for chunk in ranked:
-        chunk["context_relationships"] = [
-            relationship
-            for relationship in relationships
-            if chunk["chunk_id"] in (
-                relationship["chunk_id_1"],
-                relationship["chunk_id_2"],
-            )
-        ]
-        chunk["has_lexical_context_link"] = (
-            chunk["chunk_id"] in related_chunk_ids
-        )
-
     return ranked
 
 
@@ -179,7 +150,7 @@ def retrieve_with_context(
     top_k=DEFAULT_TOP_K,
     candidate_k=DEFAULT_CANDIDATE_K,
 ):
-    """Return retrieved chunks and their overall context analysis."""
+    """Retrieve chunks and analyze relationships between them."""
     chunks = retrieve_chunks(
         question=question,
         model=model,
@@ -188,13 +159,37 @@ def retrieve_with_context(
         candidate_k=candidate_k,
     )
 
+    context_analysis = analyze_context(
+        chunks,
+        similarity_threshold=CONTEXT_SIMILARITY_THRESHOLD,
+    )
+
+    relationships = context_analysis["relationships"]
+    relationships_by_id = {}
+
+    for relationship in relationships:
+        for chunk_id in (
+            relationship["chunk_id_1"],
+            relationship["chunk_id_2"],
+        ):
+            relationships_by_id.setdefault(chunk_id, []).append(
+                relationship
+            )
+
+    for chunk in chunks:
+        chunk_id = str(chunk.get("chunk_id", ""))
+
+        chunk["context_relationships"] = relationships_by_id.get(
+            chunk_id, []
+        )
+        chunk["has_lexical_context_link"] = bool(
+            chunk["context_relationships"]
+        )
+
     return {
         "question": question,
         "chunks": chunks,
-        "context_analysis": analyze_context(
-            chunks,
-            similarity_threshold=CONTEXT_SIMILARITY_THRESHOLD,
-        ),
+        "context_analysis": context_analysis,
     }
 
 
@@ -204,7 +199,7 @@ def main():
     print("RAG RETRIEVAL AND CONTEXT ANALYSIS")
     print("=" * 60)
 
-    client, collection = load_collection()
+    _, collection = load_collection()
     print(f"Vector database loaded: {collection.count()} chunks")
 
     print(f"Loading embedding model: {MODEL_NAME}")
@@ -237,7 +232,7 @@ def main():
                 metadata = chunk.get("metadata") or {}
 
                 print(f"\n--- Result {index} ---")
-                print("Chunk ID:", chunk["chunk_id"])
+                print("Chunk ID:", chunk.get("chunk_id", "Unknown"))
                 print(
                     "Document:",
                     metadata.get("document", "Unknown"),
@@ -248,14 +243,14 @@ def main():
                 )
                 print(
                     "Cosine similarity:",
-                    round(chunk["similarity_score"], 4),
+                    round(chunk.get("similarity_score", 0.0), 4),
                 )
                 print("Text:")
-                print(chunk["text"][:1000])
+                print(chunk.get("text", "")[:1000])
 
             analysis = result["context_analysis"]
             print(
-                "\nContext relationships:",
+                "\nLexical relationships:",
                 analysis["relationship_count"],
             )
             print("Context groups:", len(analysis["context_groups"]))
@@ -263,6 +258,9 @@ def main():
         except (KeyboardInterrupt, EOFError):
             print("\nRetrieval stopped.")
             break
+
+        except Exception as exc:
+            print(f"\nRetrieval error: {exc}")
 
 
 if __name__ == "__main__":
