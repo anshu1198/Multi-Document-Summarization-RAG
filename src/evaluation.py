@@ -1,4 +1,3 @@
-
 """
 Evaluation Module
 Project: Multi-Document Summarization with Context Awareness using RAG
@@ -14,8 +13,6 @@ These metrics do not independently measure summary quality.
 """
 
 import json
-from pathlib import Path
-from typing import Iterable
 
 from config import RESULTS_DIR
 from retrieval import (
@@ -116,7 +113,9 @@ def evaluate_multiple_queries(query_results, k=5):
 
     for index, item in enumerate(query_results, start=1):
         if not isinstance(item, dict):
-            raise TypeError(f"Query result {index} must be a dictionary.")
+            raise TypeError(
+                f"Query result {index} must be a dictionary."
+            )
 
         if "retrieved_ids" not in item or "relevant_ids" not in item:
             raise ValueError(
@@ -142,7 +141,8 @@ def evaluate_multiple_queries(query_results, k=5):
     means = {
         name: (
             sum(row[name] for row in results) / len(results)
-            if results else 0.0
+            if results
+            else 0.0
         )
         for name in metric_names
     }
@@ -181,7 +181,6 @@ def run_retrieval_evaluation(test_cases, k=3, candidate_k=10):
             candidate_k=candidate_k,
         )
 
-        # retrieval.py returns chunk_id values from the reranker.
         retrieved_ids = [
             chunk["chunk_id"]
             for chunk in output.get("chunks", [])
@@ -213,7 +212,9 @@ def run_retrieval_evaluation(test_cases, k=3, candidate_k=10):
     }
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
     output_path = RESULTS_DIR / "retrieval_evaluation.json"
+
     output_path.write_text(
         json.dumps(report, indent=2, ensure_ascii=False),
         encoding="utf-8",
@@ -227,6 +228,20 @@ def run_retrieval_evaluation(test_cases, k=3, candidate_k=10):
 
 
 if __name__ == "__main__":
-    print("Retrieval evaluation module is ready.")
-    print("Add verified test questions and relevant chunk IDs")
-    print("before running the full evaluation.")
+    print("MULTI-DOCUMENT SUMMARIZATION - RETRIEVAL EVALUATION")
+    print("=" * 55)
+
+    test_cases = [
+        {
+            "question": "What company did I complete my internship at?",
+            "relevant_chunk_ids": [
+                "Internship report(AP23110011260)_chunk_3"
+            ],
+        },
+    ]
+
+    run_retrieval_evaluation(
+        test_cases,
+        k=3,
+        candidate_k=10,
+    )
