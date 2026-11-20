@@ -1,4 +1,4 @@
-# ContextIQ — AI Document Intelligence
+# ContextIQ — MultiDoc Intelligence
 
 > **Multi-Document Summarization with Context Awareness using Retrieval-Augmented Generation (RAG)**
 
