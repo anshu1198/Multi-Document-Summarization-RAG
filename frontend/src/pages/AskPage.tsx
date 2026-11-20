@@ -259,7 +259,7 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
                 )}
 
                 <div
-                  className={`max-w-[85%] rounded-2xl p-4.5 text-xs leading-relaxed ${
+                  className={`max-w-[85%] rounded-2xl text-xs leading-relaxed ${
                     msg.role === 'user'
                       ? 'bg-[#7187E8] text-white rounded-tr-sm shadow-sm'
                       : msg.isError
@@ -267,30 +267,33 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
                       : 'bg-[#F5F6F9] text-[#202938] border border-[#E8EBF1] rounded-tl-sm'
                   }`}
                 >
-                  {/* Assistant response body */}
-                  {msg.role === 'assistant' ? (
-                    <div>
-                      {msg.content ? (
-                        <MarkdownRenderer content={msg.content} />
-                      ) : msg.isStreaming ? (
-                        <div className="flex items-center gap-2 text-[#7187E8] font-medium py-1">
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>{statusMessage || 'Retrieving context & generating answer...'}</span>
-                        </div>
-                      ) : null}
+                  {/* ── Message body ───────────────────────────────────────── */}
+                  <div className="px-4 pt-3.5 pb-1">
+                    {msg.role === 'assistant' ? (
+                      <div>
+                        {msg.content ? (
+                          <MarkdownRenderer content={msg.content} />
+                        ) : msg.isStreaming ? (
+                          <div className="flex items-center gap-2 text-[#7187E8] font-medium py-1">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>{statusMessage || 'Retrieving context & generating answer...'}</span>
+                          </div>
+                        ) : null}
+                        {msg.isStreaming && msg.content && (
+                          <span className="inline-block w-1.5 h-3.5 bg-[#7187E8] animate-pulse ml-0.5" />
+                        )}
+                      </div>
+                    ) : (
+                      /* User bubble: plain text, wraps naturally, no overflow clipping */
+                      <p className="whitespace-pre-wrap break-words text-sm font-medium leading-snug">
+                        {msg.content}
+                      </p>
+                    )}
+                  </div>
 
-                      {/* Real-time Streaming Cursor */}
-                      {msg.isStreaming && msg.content && (
-                        <span className="inline-block w-1.5 h-3.5 bg-[#7187E8] animate-pulse ml-0.5" />
-                      )}
-                    </div>
-                  ) : (
-                    <div className="whitespace-pre-wrap font-sans text-sm">{msg.content}</div>
-                  )}
-
-                  {/* Sources Badges */}
+                  {/* ── Source citations (assistant only) ─────────────────── */}
                   {msg.sources && msg.sources.length > 0 && (
-                    <div className="mt-4 pt-3 border-t border-[#E8EBF1]">
+                    <div className="mx-4 mb-1 mt-3 pt-3 border-t border-[#E8EBF1]">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-[#858D9A] mb-2 flex items-center gap-1">
                         <FileText className="w-3 h-3 text-[#7187E8]" />
                         Source Citations (Click to inspect passage):
@@ -317,18 +320,26 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
                     </div>
                   )}
 
-                  {/* Footer: Latency Chip & Timestamp */}
-                  <div className="mt-3 pt-2 border-t border-[#E8EBF1]/60 flex items-center justify-between text-[10px] text-[#858D9A]">
-                    <div className="flex items-center gap-2">
+                  {/* ── Footer: timestamp + latency + copy ────────────────── */}
+                  <div
+                    className={`px-4 pb-2.5 pt-1.5 flex items-center justify-between text-[10px] gap-2 ${
+                      msg.role === 'user'
+                        ? 'text-white/60'
+                        : 'text-[#858D9A] border-t border-[#E8EBF1]/60 mt-1'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span>{msg.timestamp}</span>
-
-                      {/* Performance Latency Badge */}
                       {msg.latency && msg.latency.total_ms > 0 && (
                         <div
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#E8EBF1]/80 text-[#202938] font-mono text-[9px]"
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-mono text-[9px] ${
+                            msg.role === 'user'
+                              ? 'bg-white/20 text-white'
+                              : 'bg-[#E8EBF1]/80 text-[#202938]'
+                          }`}
                           title={`Retrieval: ${msg.latency.retrieval_ms}ms | Rerank: ${msg.latency.reranking_ms}ms | LLM: ${msg.latency.generation_ms}ms`}
                         >
-                          <Zap className="w-2.5 h-2.5 text-amber-500" />
+                          <Zap className="w-2.5 h-2.5 text-amber-400" />
                           <span>{(msg.latency.total_ms / 1000).toFixed(2)}s</span>
                           <span className="opacity-70">
                             (Retr: {msg.latency.retrieval_ms}ms · LLM: {(msg.latency.generation_ms / 1000).toFixed(1)}s)
@@ -340,7 +351,7 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
                     {msg.role === 'assistant' && !msg.isError && msg.content && (
                       <button
                         onClick={() => handleCopy(msg.id, msg.content)}
-                        className="hover:text-[#7187E8] flex items-center gap-1 ml-4 transition-colors"
+                        className="hover:text-[#7187E8] flex items-center gap-1 ml-auto transition-colors shrink-0"
                         title="Copy answer"
                       >
                         {copiedId === msg.id ? (
