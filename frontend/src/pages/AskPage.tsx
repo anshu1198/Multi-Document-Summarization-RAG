@@ -14,6 +14,7 @@ import {
   Clock,
   Zap,
   Layers,
+  Filter,
 } from 'lucide-react';
 import { ChatMessage, DocumentItem, SourceCitation } from '../types';
 import { api } from '../services/api';
@@ -62,122 +63,75 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
-    const aiMessageId = `ai-${Date.now()}`;
-    const initialAiMessage: ChatMessage = {
-      id: aiMessageId,
+    const assistantId = `asst-${Date.now()}`;
+    const initialAssistantMessage: ChatMessage = {
+      id: assistantId,
       role: 'assistant',
       content: '',
-      isStreaming: true,
+      sources: [],
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isStreaming: true,
     };
 
-    setMessages((prev) => [...prev, userMessage, initialAiMessage]);
+    setMessages((prev) => [...prev, userMessage, initialAssistantMessage]);
     setInputValue('');
     setIsLoading(true);
-    setStatusMessage('Searching semantic vector index...');
+    setStatusMessage('Searching knowledge base...');
 
-    try {
-      // Build conversation history for follow-ups
-      const historyPayload = messages.slice(-4).map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+    const filterDoc = selectedDoc === 'all' ? null : selectedDoc;
 
-      let accumulatedContent = '';
-
-      await api.askQuestionStream(
-        textToSend,
-        selectedDoc === 'all' ? null : selectedDoc,
-        4,
-        0.1,
-        historyPayload,
-        {
-          onStatus: (_stage, msg) => {
-            setStatusMessage(msg);
-          },
-          onToken: (token) => {
-            accumulatedContent += token;
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === aiMessageId
-                  ? { ...m, content: accumulatedContent, isStreaming: true }
-                  : m
-              )
-            );
-          },
-          onDone: (data) => {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === aiMessageId
-                  ? {
-                      ...m,
-                      content: data.answer || accumulatedContent,
-                      sources: data.sources,
-                      latency: data.latency,
-                      isStreaming: false,
-                    }
-                  : m
-              )
-            );
-          },
-          onError: async (err) => {
-            // Fallback to non-streaming endpoint if streaming fails
-            try {
-              setStatusMessage('Retrying via standard endpoint...');
-              const fallbackRes = await api.askQuestion(
-                textToSend,
-                selectedDoc === 'all' ? null : selectedDoc,
-                4,
-                0.1,
-                historyPayload
-              );
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === aiMessageId
-                    ? {
-                        ...m,
-                        content: fallbackRes.answer,
-                        sources: fallbackRes.sources,
-                        latency: fallbackRes.latency,
-                        isStreaming: false,
-                      }
-                    : m
-                )
-              );
-            } catch (fallbackErr: any) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === aiMessageId
-                    ? {
-                        ...m,
-                        content: `Error: ${err.message || fallbackErr.message || 'Failed to retrieve or generate answer.'}`,
-                        isError: true,
-                        isStreaming: false,
-                      }
-                    : m
-                )
-              );
-            }
-          },
-        }
-      );
-    } catch (err: any) {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === aiMessageId
-            ? {
-                ...m,
-                content: `Error: ${err.message || 'Failed to communicate with ContextIQ backend.'}`,
-                isError: true,
-                isStreaming: false,
-              }
-            : m
-        )
-      );
-    } finally {
-      setIsLoading(false);
-      setStatusMessage('');
-    }
+    await api.askQuestionStream(
+      textToSend,
+      filterDoc,
+      4,
+      0.1,
+      null,
+      {
+        onStatus: (_stage, message) => {
+          setStatusMessage(message);
+        },
+        onToken: (token) => {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantId ? { ...msg, content: msg.content + token } : msg
+            )
+          );
+        },
+        onDone: (data) => {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantId
+                ? {
+                    ...msg,
+                    content: data.answer || msg.content,
+                    sources: data.sources || [],
+                    latency: data.latency,
+                    isStreaming: false,
+                  }
+                : msg
+            )
+          );
+          setIsLoading(false);
+          setStatusMessage('');
+        },
+        onError: (err) => {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantId
+                ? {
+                    ...msg,
+                    content: `Error: ${err.message}`,
+                    isStreaming: false,
+                    isError: true,
+                  }
+                : msg
+            )
+          );
+          setIsLoading(false);
+          setStatusMessage('');
+        },
+      }
+    );
   };
 
   const handleCopy = (id: string, text: string) => {
@@ -187,36 +141,53 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
   };
 
   const handleClear = () => {
-    setMessages([]);
+    if (window.confirm('Clear conversation history?')) {
+      setMessages([]);
+    }
   };
 
   return (
-    <div className="h-[calc(100vh-8.5rem)] flex gap-6 animate-in fade-in duration-200">
-      {/* Left Settings & Prompts Panel */}
-      <div className="w-72 bg-white rounded-2xl border border-slate-200/80 p-5 flex flex-col justify-between shadow-sm shrink-0">
+    <div className="flex h-[calc(100vh-140px)] gap-6">
+      {/* Left Sidebar: Controls & Suggested Questions (1/3) */}
+      <div className="w-80 bg-white rounded-2xl border border-[#E8EBF1] p-5 shadow-sm flex flex-col justify-between shrink-0 overflow-y-auto">
         <div className="space-y-6">
-          {/* Document Scope Filter */}
+          {/* Header */}
+          <div className="flex items-center space-x-3 pb-4 border-b border-[#E8EBF1]">
+            <div className="w-9 h-9 rounded-xl bg-[#EEF2FF] text-[#7187E8] flex items-center justify-center border border-[#7187E8]/20">
+              <MessageSquare className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-[#202938]">Ask Documents</h2>
+              <p className="text-[11px] text-[#858D9A]">Context-grounded QA</p>
+            </div>
+          </div>
+
+          {/* Scope Selector */}
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-2">
+            <label className="text-[11px] font-bold uppercase tracking-wider text-[#858D9A] block mb-2 flex items-center gap-1.5">
+              <Filter className="w-3.5 h-3.5 text-[#7187E8]" />
               Document Scope
             </label>
             <select
               value={selectedDoc}
               onChange={(e) => setSelectedDoc(e.target.value)}
-              className="w-full text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              className="w-full text-xs font-semibold bg-[#F5F6F9] border border-[#E8EBF1] rounded-xl px-3 py-2.5 text-[#202938] focus:outline-none focus:border-[#7187E8]"
             >
               <option value="all">All Indexed Documents ({documents.length})</option>
-              {documents.map((doc, idx) => (
-                <option key={idx} value={doc.document_name}>
-                  {doc.document_name}
-                </option>
-              ))}
+              {documents.map((doc, idx) => {
+                const docName = doc.document_name || doc.name || '';
+                return (
+                  <option key={idx} value={docName}>
+                    {docName}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
           {/* Suggested Questions */}
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-2">
+            <label className="text-[11px] font-bold uppercase tracking-wider text-[#858D9A] block mb-2">
               Suggested Questions
             </label>
             <div className="space-y-1.5">
@@ -225,10 +196,10 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
                   key={idx}
                   onClick={() => handleSend(q)}
                   disabled={isLoading}
-                  className="w-full text-left text-xs p-2.5 rounded-xl bg-slate-50 hover:bg-indigo-50/80 hover:text-indigo-600 border border-slate-200/70 text-slate-700 transition-colors flex items-center justify-between group disabled:opacity-50"
+                  className="w-full text-left text-xs p-2.5 rounded-xl bg-[#F5F6F9] hover:bg-[#EEF2FF] hover:text-[#7187E8] border border-[#E8EBF1] text-[#202938] transition-colors flex items-center justify-between group disabled:opacity-50"
                 >
                   <span className="truncate">{q}</span>
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600 shrink-0 ml-1" />
+                  <ChevronRight className="w-3.5 h-3.5 text-[#858D9A] group-hover:text-[#7187E8] shrink-0 ml-1" />
                 </button>
               ))}
             </div>
@@ -236,11 +207,11 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
         </div>
 
         {/* Clear Conversation */}
-        <div className="pt-4 border-t border-slate-100">
+        <div className="pt-4 border-t border-[#E8EBF1]">
           <button
             onClick={handleClear}
             disabled={messages.length === 0}
-            className="w-full flex items-center justify-center space-x-2 text-xs font-semibold py-2 px-3 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-xl border border-slate-200 transition-colors disabled:opacity-40"
+            className="w-full flex items-center justify-center space-x-2 text-xs font-semibold py-2 px-3 text-[#858D9A] hover:text-red-600 hover:bg-red-50 rounded-xl border border-[#E8EBF1] transition-colors disabled:opacity-40"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Clear Conversation</span>
@@ -248,19 +219,19 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
         </div>
       </div>
 
-      {/* Main Chat Interface */}
-      <div className="flex-1 bg-white rounded-2xl border border-slate-200/80 shadow-sm flex flex-col overflow-hidden">
+      {/* Main Chat Interface (2/3) */}
+      <div className="flex-1 bg-white rounded-2xl border border-[#E8EBF1] shadow-sm flex flex-col overflow-hidden">
         {/* Messages Scroll Area */}
         <div className="flex-1 p-6 overflow-y-auto space-y-6">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-8 max-w-md mx-auto">
-              <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mb-4 shadow-sm">
+              <div className="w-14 h-14 rounded-2xl bg-[#EEF2FF] border border-[#7187E8]/20 flex items-center justify-center text-[#7187E8] mb-4 shadow-sm">
                 <Sparkles className="w-7 h-7" />
               </div>
-              <h3 className="text-base font-bold text-slate-900 mb-1">
+              <h3 className="text-base font-bold text-[#202938] mb-1">
                 Ask Questions Grounded in Context
               </h3>
-              <p className="text-xs text-slate-500 mb-6 leading-relaxed">
+              <p className="text-xs text-[#858D9A] mb-6 leading-relaxed">
                 ContextIQ retrieves source passages from ChromaDB, reranks them using neural Cross-Encoder models, and verifies each fact before streaming the answer.
               </p>
               <div className="flex flex-wrap gap-2 justify-center">
@@ -268,7 +239,7 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
                   <button
                     key={idx}
                     onClick={() => handleSend(q)}
-                    className="text-xs font-medium px-3 py-1.5 rounded-full bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-700 transition-colors border border-slate-200"
+                    className="text-xs font-semibold px-3 py-1.5 rounded-full bg-[#F5F6F9] hover:bg-[#EEF2FF] hover:text-[#7187E8] text-[#202938] transition-colors border border-[#E8EBF1]"
                   >
                     "{q}"
                   </button>
@@ -282,7 +253,7 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
                 className={`flex gap-3.5 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 {msg.role === 'assistant' && (
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                  <div className="w-8 h-8 rounded-xl bg-[#7187E8] text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
                     <Bot className="w-4 h-4" />
                   </div>
                 )}
@@ -290,10 +261,10 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
                 <div
                   className={`max-w-[85%] rounded-2xl p-4.5 text-xs leading-relaxed ${
                     msg.role === 'user'
-                      ? 'bg-indigo-600 text-white rounded-tr-sm shadow-sm'
+                      ? 'bg-[#7187E8] text-white rounded-tr-sm shadow-sm'
                       : msg.isError
-                      ? 'bg-rose-50 text-rose-800 border border-rose-200 rounded-tl-sm'
-                      : 'bg-slate-50 text-slate-800 border border-slate-200/80 rounded-tl-sm'
+                      ? 'bg-red-50 text-red-800 border border-red-200 rounded-tl-sm'
+                      : 'bg-[#F5F6F9] text-[#202938] border border-[#E8EBF1] rounded-tl-sm'
                   }`}
                 >
                   {/* Assistant response body */}
@@ -302,7 +273,7 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
                       {msg.content ? (
                         <MarkdownRenderer content={msg.content} />
                       ) : msg.isStreaming ? (
-                        <div className="flex items-center gap-2 text-indigo-600 font-medium py-1">
+                        <div className="flex items-center gap-2 text-[#7187E8] font-medium py-1">
                           <Loader2 className="w-4 h-4 animate-spin" />
                           <span>{statusMessage || 'Retrieving context & generating answer...'}</span>
                         </div>
@@ -310,7 +281,7 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
 
                       {/* Real-time Streaming Cursor */}
                       {msg.isStreaming && msg.content && (
-                        <span className="inline-block w-1.5 h-3.5 bg-indigo-600 animate-pulse ml-0.5" />
+                        <span className="inline-block w-1.5 h-3.5 bg-[#7187E8] animate-pulse ml-0.5" />
                       )}
                     </div>
                   ) : (
@@ -319,9 +290,9 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
 
                   {/* Sources Badges */}
                   {msg.sources && msg.sources.length > 0 && (
-                    <div className="mt-4 pt-3 border-t border-slate-200/80">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1">
-                        <FileText className="w-3 h-3" />
+                    <div className="mt-4 pt-3 border-t border-[#E8EBF1]">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#858D9A] mb-2 flex items-center gap-1">
+                        <FileText className="w-3 h-3 text-[#7187E8]" />
                         Source Citations (Click to inspect passage):
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -329,14 +300,14 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
                           <button
                             key={idx}
                             onClick={() => onOpenCitation(src)}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:border-indigo-400 hover:text-indigo-600 text-slate-700 text-xs font-semibold shadow-xs transition-colors"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-[#E8EBF1] hover:border-[#7187E8] hover:text-[#7187E8] text-[#202938] text-xs font-semibold shadow-xs transition-colors"
                           >
-                            <FileText className="w-3.5 h-3.5 text-indigo-500" />
-                            <span>
+                            <FileText className="w-3.5 h-3.5 text-[#7187E8]" />
+                            <span className="truncate max-w-[200px]">
                               {src.document} — Page {src.page_number}
                             </span>
                             {src.score > 0 && (
-                              <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1 rounded">
+                              <span className="text-[10px] text-green-700 bg-green-50 px-1 rounded font-mono">
                                 {Math.round(src.score * 100)}%
                               </span>
                             )}
@@ -347,19 +318,19 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
                   )}
 
                   {/* Footer: Latency Chip & Timestamp */}
-                  <div className="mt-3 pt-2 border-t border-slate-200/40 flex items-center justify-between text-[10px] text-slate-500">
+                  <div className="mt-3 pt-2 border-t border-[#E8EBF1]/60 flex items-center justify-between text-[10px] text-[#858D9A]">
                     <div className="flex items-center gap-2">
                       <span>{msg.timestamp}</span>
 
                       {/* Performance Latency Badge */}
                       {msg.latency && msg.latency.total_ms > 0 && (
                         <div
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-200/70 text-slate-700 font-mono text-[9px]"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#E8EBF1]/80 text-[#202938] font-mono text-[9px]"
                           title={`Retrieval: ${msg.latency.retrieval_ms}ms | Rerank: ${msg.latency.reranking_ms}ms | LLM: ${msg.latency.generation_ms}ms`}
                         >
                           <Zap className="w-2.5 h-2.5 text-amber-500" />
                           <span>{(msg.latency.total_ms / 1000).toFixed(2)}s</span>
-                          <span className="opacity-60">
+                          <span className="opacity-70">
                             (Retr: {msg.latency.retrieval_ms}ms · LLM: {(msg.latency.generation_ms / 1000).toFixed(1)}s)
                           </span>
                         </div>
@@ -369,11 +340,11 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
                     {msg.role === 'assistant' && !msg.isError && msg.content && (
                       <button
                         onClick={() => handleCopy(msg.id, msg.content)}
-                        className="hover:text-indigo-600 flex items-center gap-1 ml-4 transition-colors"
+                        className="hover:text-[#7187E8] flex items-center gap-1 ml-4 transition-colors"
                         title="Copy answer"
                       >
                         {copiedId === msg.id ? (
-                          <Check className="w-3 h-3 text-emerald-600" />
+                          <Check className="w-3 h-3 text-green-600" />
                         ) : (
                           <Copy className="w-3 h-3" />
                         )}
@@ -384,7 +355,7 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
                 </div>
 
                 {msg.role === 'user' && (
-                  <div className="w-8 h-8 rounded-xl bg-slate-800 text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                  <div className="w-8 h-8 rounded-xl bg-[#202938] text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
                     <User className="w-4 h-4" />
                   </div>
                 )}
@@ -396,7 +367,7 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
         </div>
 
         {/* Input Bar */}
-        <div className="p-4 bg-slate-50/70 border-t border-slate-200/80">
+        <div className="p-4 bg-[#F5F6F9] border-t border-[#E8EBF1]">
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -410,12 +381,12 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
               onChange={(e) => setInputValue(e.target.value)}
               placeholder="Ask a question about the uploaded documents (e.g., 'What is the internship duration?')..."
               disabled={isLoading}
-              className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 shadow-xs"
+              className="flex-1 bg-white border border-[#E8EBF1] rounded-xl px-4 py-3 text-xs text-[#202938] placeholder:text-[#858D9A] focus:outline-none focus:border-[#7187E8] shadow-xs"
             />
             <button
               type="submit"
               disabled={!inputValue.trim() || isLoading}
-              className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white px-5 py-3 rounded-xl text-xs font-semibold shadow-sm shadow-indigo-600/20 flex items-center gap-1.5 transition-all"
+              className="bg-[#7187E8] hover:bg-[#5E75DE] disabled:opacity-40 text-white px-5 py-3 rounded-xl text-xs font-bold shadow-sm shadow-[#7187E8]/20 flex items-center gap-1.5 transition-all"
             >
               {isLoading ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -430,3 +401,5 @@ export const AskPage: React.FC<AskPageProps> = ({ documents, onOpenCitation }) =
     </div>
   );
 };
+
+export default AskPage;

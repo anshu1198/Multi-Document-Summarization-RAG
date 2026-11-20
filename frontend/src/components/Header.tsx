@@ -1,5 +1,14 @@
-import React from 'react';
-import { UploadCloud, Search, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  Search,
+  Sparkles,
+  UploadCloud,
+  Bell,
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle,
+  Calendar,
+} from 'lucide-react';
 import { ActiveTab, HealthStatus } from '../types';
 
 interface HeaderProps {
@@ -8,42 +17,10 @@ interface HeaderProps {
   health: HealthStatus | null;
   onRefresh: () => void;
   isRefreshing: boolean;
+  onOpenUploadModal?: () => void;
+  searchQuery?: string;
+  setSearchQuery?: (q: string) => void;
 }
-
-const titles: Record<ActiveTab, { title: string; subtitle: string }> = {
-  dashboard: {
-    title: 'Workspace Dashboard',
-    subtitle: 'Overview of indexed documents, retrieval health, and AI actions',
-  },
-  upload: {
-    title: 'Document Management',
-    subtitle: 'Upload, extract, chunk, and index PDF documents into ChromaDB',
-  },
-  summarizer: {
-    title: 'AI Multi-Document Summarizer',
-    subtitle: 'Generate executive, detailed, bullet-point, and multi-document summaries',
-  },
-  ask: {
-    title: 'Ask Your Documents',
-    subtitle: 'Interactive conversational RAG grounded strictly in uploaded passages',
-  },
-  compare: {
-    title: 'Multi-Document Comparison',
-    subtitle: 'Cross-examine multiple documents for similarities, differences, and key takeaways',
-  },
-  contradictions: {
-    title: 'Contradiction & Conflict Detection',
-    subtitle: 'Identify factual discrepancies and conflicting dates across documents',
-  },
-  history: {
-    title: 'Session & Query History',
-    subtitle: 'Review and reopen previous queries, summaries, comparisons, and findings',
-  },
-  settings: {
-    title: 'System Settings & Architecture',
-    subtitle: 'Vector database, Ollama runtime, embedding models, and retrieval configuration',
-  },
-};
 
 export const Header: React.FC<HeaderProps> = ({
   activeTab,
@@ -51,33 +28,71 @@ export const Header: React.FC<HeaderProps> = ({
   health,
   onRefresh,
   isRefreshing,
+  onOpenUploadModal,
+  searchQuery = '',
+  setSearchQuery,
 }) => {
-  const current = titles[activeTab] || titles.dashboard;
+  const [hasUnread, setHasUnread] = useState(true);
+
+  // Dynamic greeting based on current local hour
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning!' : hour < 18 ? 'Good afternoon!' : 'Good evening!';
+  const formattedDate = new Date().toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 
   return (
-    <header className="h-18 bg-white border-b border-slate-200/80 px-8 flex items-center justify-between z-10 shrink-0">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900 tracking-tight">{current.title}</h1>
-        <p className="text-xs text-slate-500 font-medium">{current.subtitle}</p>
+    <header className="h-20 bg-white border-b border-[#E8EBF1] px-6 lg:px-8 flex items-center justify-between z-10 shrink-0">
+      {/* Left: Greeting & Subtitle */}
+      <div className="flex flex-col justify-center">
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg lg:text-xl font-extrabold text-[#202938] tracking-tight">
+            {greeting}
+          </h1>
+          <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-medium text-[#858D9A] bg-[#F5F6F9] px-2.5 py-0.5 rounded-full border border-[#E8EBF1]">
+            <Calendar className="w-3 h-3 text-[#7187E8]" />
+            {formattedDate}
+          </span>
+        </div>
+        <p className="text-xs text-[#858D9A] font-medium mt-0.5">
+          Your documents, connected intelligently.
+        </p>
       </div>
 
-      <div className="flex items-center space-x-4">
-        {/* Refresh button */}
+      {/* Center: Search Bar */}
+      <div className="hidden md:flex items-center flex-1 max-w-md mx-6">
+        <div className="relative w-full">
+          <Search className="w-4 h-4 text-[#858D9A] absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery && setSearchQuery(e.target.value)}
+            placeholder="Search documents, summaries, cross-doc concepts..."
+            className="w-full bg-[#F5F6F9] hover:bg-[#F0F2F7] focus:bg-white text-xs text-[#202938] placeholder-[#858D9A] pl-9 pr-4 py-2.5 rounded-xl border border-transparent focus:border-[#7187E8] focus:outline-none transition-all"
+          />
+        </div>
+      </div>
+
+      {/* Right: Actions, Notifications, & Profile */}
+      <div className="flex items-center space-x-2.5 lg:space-x-3">
+        {/* Refresh Data Button */}
         <button
           onClick={onRefresh}
           disabled={isRefreshing}
           title="Refresh Data"
-          className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
+          className="p-2 text-[#858D9A] hover:text-[#202938] hover:bg-[#F5F6F9] rounded-xl border border-[#E8EBF1] transition-colors disabled:opacity-50"
         >
-          <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-indigo-600' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-[#7187E8]' : ''}`} />
         </button>
 
-        {/* Health status pill */}
+        {/* System Status Pill */}
         <div
-          className={`flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
+          className={`hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold border ${
             health?.ollama_status === 'connected'
-              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-              : 'bg-rose-50 text-rose-700 border-rose-200'
+              ? 'bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]'
+              : 'bg-[#FEF2F2] text-[#991B1B] border-[#FECACA]'
           }`}
         >
           {health?.ollama_status === 'connected' ? (
@@ -85,23 +100,48 @@ export const Header: React.FC<HeaderProps> = ({
           ) : (
             <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
           )}
-          <span>{health?.ollama_status === 'connected' ? 'LLM Ready' : 'LLM Offline'}</span>
+          <span>{health?.ollama_status === 'connected' ? 'Llama 3.2:3b Ready' : 'Ollama Offline'}</span>
         </div>
 
-        {/* Upload Action Button */}
-        {activeTab !== 'upload' && (
-          <button
-            onClick={() => setActiveTab('upload')}
-            className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm shadow-indigo-600/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
-          >
-            <UploadCloud className="w-4 h-4" />
-            <span>Upload Documents</span>
-          </button>
-        )}
+        {/* Upload Documents Button */}
+        <button
+          onClick={() => {
+            if (onOpenUploadModal) {
+              onOpenUploadModal();
+            } else {
+              setActiveTab('documents');
+            }
+          }}
+          className="flex items-center space-x-1.5 bg-white hover:bg-[#F5F6F9] text-[#202938] border border-[#E8EBF1] text-xs font-semibold px-3.5 py-2 rounded-xl transition-all shadow-xs"
+        >
+          <UploadCloud className="w-3.5 h-3.5 text-[#7187E8]" />
+          <span className="hidden sm:inline">Upload Documents</span>
+        </button>
 
-        {/* User Avatar */}
-        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-slate-800 to-indigo-900 border border-slate-200 flex items-center justify-center text-white text-xs font-bold shadow-sm">
-          CQ
+        {/* New Summary Primary Action Button */}
+        <button
+          onClick={() => setActiveTab('summarizer')}
+          className="flex items-center space-x-1.5 bg-[#7187E8] hover:bg-[#5E75DE] text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-sm shadow-[#7187E8]/25 transition-all hover:scale-[1.01] active:scale-[0.99]"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-white" />
+          <span>New Summary</span>
+        </button>
+
+        {/* Notification Bell */}
+        <button
+          onClick={() => setHasUnread(false)}
+          title="Notifications"
+          className="relative p-2 text-[#858D9A] hover:text-[#202938] hover:bg-[#F5F6F9] rounded-xl border border-[#E8EBF1] transition-colors"
+        >
+          <Bell className="w-4 h-4" />
+          {hasUnread && (
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#7187E8] rounded-full ring-2 ring-white" />
+          )}
+        </button>
+
+        {/* User Profile Avatar */}
+        <div className="w-8 h-8 rounded-full bg-[#7187E8]/10 border border-[#7187E8]/20 flex items-center justify-center text-[#7187E8] text-xs font-bold shadow-xs">
+          AS
         </div>
       </div>
     </header>

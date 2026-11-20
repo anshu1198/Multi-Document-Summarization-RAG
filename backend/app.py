@@ -365,6 +365,71 @@ def detect_contradictions_endpoint(req: ContradictionRequest):
     return res
 
 
+@app.get("/api/context/explore", tags=["Context Awareness"])
+def get_context_exploration(document_names: Optional[str] = Query(None)):
+    """
+    Explore cross-document relationships, lexical graph overlap, shared concepts,
+    and topical clusters across indexed documents in ChromaDB.
+    """
+    from backend.context_awareness import analyze_context, normalize_text
+    col = get_or_create_collection()
+    where_clause = None
+    if document_names:
+        doc_list = [d.strip() for d in document_names.split(",") if d.strip()]
+        if len(doc_list) == 1:
+            where_clause = {"document": doc_list[0]}
+        elif len(doc_list) > 1:
+            where_clause = {"document": {"$in": doc_list}}
+
+    records = col.get(where=where_clause, include=["documents", "metadatas"])
+    texts = records.get("documents", []) or []
+    metas = records.get("metadatas", []) or []
+
+    chunks = []
+    for t, m in zip(texts, metas):
+        chunks.append({
+            "text": t,
+            "document": m.get("document", "Unknown"),
+            "page_number": m.get("page_number", 1),
+            "chunk_id": m.get("chunk_id", ""),
+        })
+
+    doc_buckets = {}
+    for c in chunks:
+        doc_buckets.setdefault(c["document"], []).append(c)
+
+    sampled = []
+    for d_name, d_chunks in doc_buckets.items():
+        step = max(1, len(d_chunks) // 8)
+        sampled.extend(d_chunks[::step][:8])
+
+    analysis = analyze_context(sampled, similarity_threshold=0.08)
+
+    term_doc_map = {}
+    for c in sampled:
+        tokens = set(normalize_text(c["text"]))
+        for tok in tokens:
+            term_doc_map.setdefault(tok, set()).add(c["document"])
+
+    cross_doc_terms = [
+        {"term": tok, "doc_count": len(docs), "documents": list(docs)}
+        for tok, docs in term_doc_map.items()
+        if len(docs) > 1
+    ]
+    cross_doc_terms.sort(key=lambda x: x["doc_count"], reverse=True)
+
+    return {
+        "status": "success",
+        "total_documents": len(doc_buckets),
+        "total_sampled_chunks": len(sampled),
+        "relationships_count": len(analysis.get("relationships", [])),
+        "relationships": analysis.get("relationships", []),
+        "context_groups": analysis.get("context_groups", []),
+        "cross_document_concepts": cross_doc_terms[:25],
+        "documents": list(doc_buckets.keys()),
+    }
+
+
 @app.get("/api/history", response_model=HistoryResponse, tags=["History"])
 def get_history():
     """Retrieve persisted history of past interactions."""

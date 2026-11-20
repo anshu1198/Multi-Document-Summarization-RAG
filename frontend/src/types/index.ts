@@ -26,12 +26,14 @@ export interface DashboardMetrics {
 
 export interface DocumentItem {
   document_name: string;
+  name?: string;
   page_count: number;
   chunk_count: number;
   upload_date: string;
   file_size: number;
   status: 'ready' | 'processing' | 'failed';
   is_scanned?: boolean;
+  category?: string;
 }
 
 export interface SourceCitation {
@@ -61,6 +63,9 @@ export interface SummaryResult {
   sources: { document: string; page_number: number }[];
   latency?: LatencyMetrics;
   status: string;
+  selected_documents?: string[];
+  key_insights?: string[];
+  important_topics?: string[];
 }
 
 export interface ComparisonResult {
@@ -106,11 +111,50 @@ export interface HistoryItem {
   metadata: Record<string, any>;
 }
 
+export interface ContextRelationship {
+  chunk_id_1: string;
+  chunk_id_2: string;
+  source_1: string;
+  source_2: string;
+  page_1: number;
+  page_2: number;
+  similarity: number;
+  shared_terms: string[];
+  relationship_type: string;
+}
+
+export interface ContextGroup {
+  group_id: number;
+  chunk_ids: string[];
+  sources: string[];
+  pages: number[];
+}
+
+export interface CrossDocConcept {
+  term: string;
+  doc_count: number;
+  documents: string[];
+}
+
+export interface ContextExplorationResult {
+  status: string;
+  total_documents: number;
+  total_sampled_chunks: number;
+  relationships_count: number;
+  relationships: ContextRelationship[];
+  context_groups: ContextGroup[];
+  cross_document_concepts: CrossDocConcept[];
+  documents: string[];
+}
+
 export type ActiveTab =
+  | 'overview'
   | 'dashboard'
+  | 'documents'
   | 'upload'
-  | 'ask'
   | 'summarizer'
+  | 'ask'
+  | 'context'
   | 'compare'
   | 'contradictions'
   | 'history'

@@ -8,6 +8,7 @@ import {
   ComparisonResult,
   ContradictionResult,
   HistoryItem,
+  ContextExplorationResult,
 } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
@@ -234,5 +235,13 @@ export const api = {
       method: 'DELETE',
     });
     return handleResponse<{ message: string }>(res);
+  },
+
+  async getContextExploration(documentNames?: string[]): Promise<ContextExplorationResult> {
+    const query = documentNames && documentNames.length > 0
+      ? `?document_names=${encodeURIComponent(documentNames.join(','))}`
+      : '';
+    const res = await fetch(`${API_BASE}/api/context/explore${query}`);
+    return handleResponse<ContextExplorationResult>(res);
   },
 };
