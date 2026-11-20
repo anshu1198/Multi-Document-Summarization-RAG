@@ -14,12 +14,15 @@ import {
   FileText,
 } from 'lucide-react';
 import { ActiveTab, HealthStatus } from '../types';
+import { UserProfile, getInitials } from '../utils/userProfile';
 
 interface SidebarProps {
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
   health: HealthStatus | null;
   docsCount: number;
+  userProfile?: UserProfile;
+  onOpenProfileModal?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -27,6 +30,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setActiveTab,
   health,
   docsCount,
+  userProfile = { name: 'Document Analyst', role: 'AI Document Workspace' },
+  onOpenProfileModal,
 }) => {
   const navItems: { id: ActiveTab; label: string; icon: React.ElementType; badge?: string }[] = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -138,17 +143,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        {/* User Workspace Profile */}
-        <div className="flex items-center space-x-2.5 pt-1 px-1">
-          <div className="w-8 h-8 rounded-full bg-[#EEF2FF] border border-[#7187E8]/30 text-[#7187E8] flex items-center justify-center font-bold text-xs">
-            AS
+        {/* User Workspace Profile - Click to Edit / Settings */}
+        <div
+          onClick={() => {
+            if (onOpenProfileModal) {
+              onOpenProfileModal();
+            } else {
+              setActiveTab('settings');
+            }
+          }}
+          className="flex items-center space-x-2.5 pt-1 px-2 py-1.5 rounded-xl hover:bg-[#F5F6F9] cursor-pointer transition-colors group"
+          title="Click to change workspace user profile"
+        >
+          <div className="w-8 h-8 rounded-full bg-[#EEF2FF] border border-[#7187E8]/30 text-[#7187E8] flex items-center justify-center font-bold text-xs shrink-0 group-hover:border-[#7187E8]">
+            {getInitials(userProfile.name)}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-bold text-[#202938] truncate">
-              Anshu Sharma
+            <div className="text-xs font-bold text-[#202938] truncate group-hover:text-[#7187E8] transition-colors">
+              {userProfile.name}
             </div>
             <div className="text-[10px] text-[#858D9A] truncate">
-              AI Document Workspace
+              {userProfile.role}
             </div>
           </div>
         </div>

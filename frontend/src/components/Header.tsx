@@ -10,6 +10,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { ActiveTab, HealthStatus } from '../types';
+import { UserProfile, getInitials } from '../utils/userProfile';
 
 interface HeaderProps {
   activeTab: ActiveTab;
@@ -20,6 +21,8 @@ interface HeaderProps {
   onOpenUploadModal?: () => void;
   searchQuery?: string;
   setSearchQuery?: (q: string) => void;
+  userProfile?: UserProfile;
+  onOpenProfileModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -31,6 +34,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenUploadModal,
   searchQuery = '',
   setSearchQuery,
+  userProfile = { name: 'Document Analyst', role: 'AI Document Workspace' },
+  onOpenProfileModal,
 }) => {
   const [hasUnread, setHasUnread] = useState(true);
 
@@ -139,9 +144,19 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </button>
 
-        {/* User Profile Avatar */}
-        <div className="w-8 h-8 rounded-full bg-[#7187E8]/10 border border-[#7187E8]/20 flex items-center justify-center text-[#7187E8] text-xs font-bold shadow-xs">
-          AS
+        {/* User Profile Avatar - Click to Edit */}
+        <div
+          onClick={() => {
+            if (onOpenProfileModal) {
+              onOpenProfileModal();
+            } else {
+              setActiveTab('settings');
+            }
+          }}
+          className="w-8 h-8 rounded-full bg-[#EEF2FF] border border-[#7187E8]/30 flex items-center justify-center text-[#7187E8] text-xs font-bold shadow-xs hover:border-[#7187E8] cursor-pointer transition-colors"
+          title={`Signed in as ${userProfile.name} (Click to change)`}
+        >
+          {getInitials(userProfile.name)}
         </div>
       </div>
     </header>

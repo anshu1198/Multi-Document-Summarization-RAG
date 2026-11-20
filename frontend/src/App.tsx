@@ -4,6 +4,7 @@ import { api } from './services/api';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { ChunkModal } from './components/ChunkModal';
+import { UserProfile, getStoredUserProfile, saveStoredUserProfile, getInitials } from './utils/userProfile';
 
 // Redesigned Inkw ise-inspired Enterprise Pages
 import { OverviewPage } from './pages/OverviewPage';
@@ -16,8 +17,8 @@ import { ContradictionPage } from './pages/ContradictionPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { SettingsPage } from './pages/SettingsPage';
 
-// Upload Modal Component for global Header action
-import { UploadCloud, FileText, CheckCircle2, AlertCircle, Loader2, X } from 'lucide-react';
+// Icons
+import { UploadCloud, FileText, CheckCircle2, AlertCircle, Loader2, X, User, Check, Save } from 'lucide-react';
 
 interface UploadProgressItem {
   id: string;
@@ -36,6 +37,12 @@ export const App: React.FC = () => {
   const [activeCitation, setActiveCitation] = useState<SourceCitation | null>(null);
   const [preselectedDocForSummary, setPreselectedDocForSummary] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // User Profile State (persisted in localStorage)
+  const [userProfile, setUserProfile] = useState<UserProfile>(() => getStoredUserProfile());
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [editName, setEditName] = useState(userProfile.name);
+  const [editRole, setEditRole] = useState(userProfile.role);
 
   // Global Upload Modal State
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -65,7 +72,6 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     loadData();
-    // Light polling every 45s
     const interval = setInterval(loadData, 45000);
     return () => clearInterval(interval);
   }, [loadData]);
@@ -85,6 +91,17 @@ export const App: React.FC = () => {
   const handleSelectDocForSummary = (docName: string) => {
     setPreselectedDocForSummary(docName);
     setActiveTab('summarizer');
+  };
+
+  const handleSaveProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    const updated = {
+      name: editName.trim() || 'Document Analyst',
+      role: editRole.trim() || 'AI Document Workspace',
+    };
+    saveStoredUserProfile(updated);
+    setUserProfile(updated);
+    setIsProfileModalOpen(false);
   };
 
   // Upload handler for global modal
@@ -200,6 +217,12 @@ export const App: React.FC = () => {
           }}
           health={health}
           docsCount={documents.length}
+          userProfile={userProfile}
+          onOpenProfileModal={() => {
+            setEditName(userProfile.name);
+            setEditRole(userProfile.role);
+            setIsProfileModalOpen(true);
+          }}
         />
 
         {/* Main Workspace Area */}
@@ -214,6 +237,12 @@ export const App: React.FC = () => {
             onOpenUploadModal={() => setIsUploadModalOpen(true)}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
+            userProfile={userProfile}
+            onOpenProfileModal={() => {
+              setEditName(userProfile.name);
+              setEditRole(userProfile.role);
+              setIsProfileModalOpen(true);
+            }}
           />
 
           {/* Main Content Surfaces: Soft Light Grey Background */}
@@ -271,11 +300,101 @@ export const App: React.FC = () => {
             {activeTab === 'history' && <HistoryPage />}
 
             {activeTab === 'settings' && (
-              <SettingsPage health={health} onRefresh={loadData} />
+              <SettingsPage
+                health={health}
+                onRefresh={loadData}
+                userProfile={userProfile}
+                onUpdateProfile={(updated) => setUserProfile(updated)}
+              />
             )}
           </main>
         </div>
       </div>
+
+      {/* Quick Profile Edit Modal */}
+      {isProfileModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl border border-[#E8EBF1] shadow-2xl max-w-md w-full p-6 space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E8EBF1]">
+              <div className="flex items-center space-x-3">
+                <div className="w-9 h-9 rounded-xl bg-[#EEF2FF] text-[#7187E8] flex items-center justify-center border border-[#7187E8]/20">
+                  <User className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-[#202938]">Edit Workspace Profile</h3>
+                  <p className="text-xs text-[#858D9A]">Customize the user identity shown across the app</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsProfileModalOpen(false)}
+                className="p-1.5 text-[#858D9A] hover:text-[#202938] hover:bg-[#F5F6F9] rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProfile} className="space-y-4">
+              <div className="flex items-center space-x-3.5 p-3 bg-[#F5F6F9] rounded-2xl border border-[#E8EBF1]">
+                <div className="w-12 h-12 rounded-full bg-[#EEF2FF] border-2 border-[#7187E8] flex items-center justify-center text-[#7187E8] text-base font-extrabold shadow-sm shrink-0">
+                  {getInitials(editName)}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-[#202938] truncate">
+                    {editName.trim() || 'Your Name'}
+                  </div>
+                  <div className="text-[11px] text-[#858D9A] truncate">
+                    {editRole.trim() || 'AI Document Workspace'}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-[#202938] block mb-1.5">
+                  Display Name
+                </label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Enter your name (e.g. Charitha Sree)"
+                  className="w-full bg-[#F5F6F9] border border-[#E8EBF1] rounded-xl px-3.5 py-2.5 text-xs text-[#202938] font-medium focus:outline-none focus:border-[#7187E8]"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-[#202938] block mb-1.5">
+                  Workspace Role / Subtitle
+                </label>
+                <input
+                  type="text"
+                  value={editRole}
+                  onChange={(e) => setEditRole(e.target.value)}
+                  placeholder="e.g. Lead Researcher / Student"
+                  className="w-full bg-[#F5F6F9] border border-[#E8EBF1] rounded-xl px-3.5 py-2.5 text-xs text-[#202938] font-medium focus:outline-none focus:border-[#7187E8]"
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-3 border-t border-[#E8EBF1]">
+                <button
+                  type="button"
+                  onClick={() => setIsProfileModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-[#858D9A] hover:text-[#202938] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#7187E8] hover:bg-[#5E75DE] text-white text-xs font-bold rounded-xl shadow-sm transition-all"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  Save Identity
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Global Upload Documents Modal */}
       {isUploadModalOpen && (

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Cpu,
   Database,
@@ -10,17 +10,129 @@ import {
   Sliders,
   CheckCircle2,
   RefreshCw,
+  User,
+  Check,
+  Save,
 } from 'lucide-react';
 import { HealthStatus } from '../types';
+import { UserProfile, getInitials, saveStoredUserProfile } from '../utils/userProfile';
 
 interface SettingsPageProps {
   health: HealthStatus | null;
   onRefresh: () => void;
+  userProfile?: UserProfile;
+  onUpdateProfile?: (profile: UserProfile) => void;
 }
 
-export const SettingsPage: React.FC<SettingsPageProps> = ({ health, onRefresh }) => {
+export const SettingsPage: React.FC<SettingsPageProps> = ({
+  health,
+  onRefresh,
+  userProfile = { name: 'Document Analyst', role: 'AI Document Workspace' },
+  onUpdateProfile,
+}) => {
+  const [name, setName] = useState(userProfile.name);
+  const [role, setRole] = useState(userProfile.role);
+  const [isSaved, setIsSaved] = useState(false);
+
+  const handleSaveProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    const updated = {
+      name: name.trim() || 'Document Analyst',
+      role: role.trim() || 'AI Document Workspace',
+    };
+    saveStoredUserProfile(updated);
+    if (onUpdateProfile) {
+      onUpdateProfile(updated);
+    }
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 2500);
+  };
+
   return (
     <div className="space-y-6 max-w-5xl animate-fade-in">
+      {/* Workspace Identity & User Profile Customization */}
+      <div className="bg-white rounded-2xl border border-[#E8EBF1] p-6 shadow-sm">
+        <div className="flex items-center space-x-3 mb-5 pb-4 border-b border-[#E8EBF1]">
+          <div className="w-10 h-10 rounded-xl bg-[#EEF2FF] text-[#7187E8] flex items-center justify-center border border-[#7187E8]/20">
+            <User className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-[#202938] tracking-tight">
+              Workspace Identity & User Profile
+            </h2>
+            <p className="text-xs text-[#858D9A]">
+              Personalize the name and role shown on your sidebar, header, and generated reports.
+            </p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSaveProfile} className="space-y-4 max-w-2xl">
+          <div className="flex items-center space-x-4 mb-2">
+            <div className="w-14 h-14 rounded-full bg-[#EEF2FF] border-2 border-[#7187E8] flex items-center justify-center text-[#7187E8] text-lg font-extrabold shadow-sm">
+              {getInitials(name)}
+            </div>
+            <div>
+              <div className="text-xs font-bold text-[#202938]">Avatar Preview</div>
+              <div className="text-[11px] text-[#858D9A]">
+                Initials automatically generated from your name
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-bold text-[#202938] block mb-1.5">
+                Your Full Name / Workspace Owner
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Charitha Sree or Your Name"
+                className="w-full bg-[#F5F6F9] border border-[#E8EBF1] rounded-xl px-3.5 py-2.5 text-xs text-[#202938] font-medium focus:outline-none focus:border-[#7187E8]"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-[#202938] block mb-1.5">
+                Workspace Role / Title
+              </label>
+              <input
+                type="text"
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                placeholder="e.g. AI Research Lead / Student"
+                className="w-full bg-[#F5F6F9] border border-[#E8EBF1] rounded-xl px-3.5 py-2.5 text-xs text-[#202938] font-medium focus:outline-none focus:border-[#7187E8]"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-3 pt-2">
+            <button
+              type="submit"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#7187E8] hover:bg-[#5E75DE] text-white text-xs font-bold rounded-xl shadow-sm shadow-[#7187E8]/20 transition-all"
+            >
+              {isSaved ? (
+                <>
+                  <Check className="w-4 h-4 text-white" />
+                  <span>Saved to Workspace!</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  <span>Update Profile Name</span>
+                </>
+              )}
+            </button>
+
+            <span className="text-[11px] text-[#858D9A]">
+              Changes are saved to browser storage and reflected across all screens.
+            </span>
+          </div>
+        </form>
+      </div>
+
       {/* System Health Status Banner */}
       <div className="bg-white rounded-2xl border border-[#E8EBF1] p-6 shadow-sm">
         <div className="flex items-center justify-between mb-6">
