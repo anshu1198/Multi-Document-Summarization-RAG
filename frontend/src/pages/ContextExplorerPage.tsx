@@ -106,56 +106,60 @@ export const ContextExplorerPage: React.FC<ContextExplorerPageProps> = ({ docume
 
       {/* KPI Stats Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl border border-[#E8EBF1] p-4.5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#858D9A]">Indexed Corpus</span>
-            <div className="w-7 h-7 rounded-lg bg-[#EEF2FF] text-[#7187E8] flex items-center justify-center">
+        {/* Card 1 – Indexed Corpus */}
+        <div className="bg-white rounded-2xl border border-[#E8EBF1] shadow-sm flex flex-col justify-between p-5 min-h-[108px]">
+          <div className="flex items-center justify-between w-full">
+            <span className="text-xs font-semibold text-[#858D9A] leading-tight">Indexed Corpus</span>
+            <div className="w-8 h-8 rounded-xl bg-[#EEF2FF] text-[#7187E8] flex items-center justify-center shrink-0">
               <FileText className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-[#202938] mt-2">
+          <div className="text-3xl font-extrabold text-[#202938] leading-none mt-3">
             {data?.total_documents ?? documents.length}
           </div>
-          <div className="text-[11px] text-[#858D9A] mt-0.5">Documents analyzed</div>
+          <div className="text-[11px] text-[#858D9A] mt-1.5 leading-tight">Documents analyzed</div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-[#E8EBF1] p-4.5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#858D9A]">Cross-Doc Links</span>
-            <div className="w-7 h-7 rounded-lg bg-[#F0FDF4] text-[#16A34A] flex items-center justify-center">
+        {/* Card 2 – Cross-Doc Links */}
+        <div className="bg-white rounded-2xl border border-[#E8EBF1] shadow-sm flex flex-col justify-between p-5 min-h-[108px]">
+          <div className="flex items-center justify-between w-full">
+            <span className="text-xs font-semibold text-[#858D9A] leading-tight">Cross-Doc Links</span>
+            <div className="w-8 h-8 rounded-xl bg-[#F0FDF4] text-[#16A34A] flex items-center justify-center shrink-0">
               <Share2 className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-[#202938] mt-2">
+          <div className="text-3xl font-extrabold text-[#202938] leading-none mt-3">
             {data?.relationships_count ?? 0}
           </div>
-          <div className="text-[11px] text-[#858D9A] mt-0.5">Discovered overlap links</div>
+          <div className="text-[11px] text-[#858D9A] mt-1.5 leading-tight">Discovered overlap links</div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-[#E8EBF1] p-4.5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#858D9A]">Topical Clusters</span>
-            <div className="w-7 h-7 rounded-lg bg-[#FAF5FF] text-[#9333EA] flex items-center justify-center">
+        {/* Card 3 – Topical Clusters */}
+        <div className="bg-white rounded-2xl border border-[#E8EBF1] shadow-sm flex flex-col justify-between p-5 min-h-[108px]">
+          <div className="flex items-center justify-between w-full">
+            <span className="text-xs font-semibold text-[#858D9A] leading-tight">Topical Clusters</span>
+            <div className="w-8 h-8 rounded-xl bg-[#FAF5FF] text-[#9333EA] flex items-center justify-center shrink-0">
               <Layers className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-[#202938] mt-2">
+          <div className="text-3xl font-extrabold text-[#202938] leading-none mt-3">
             {data?.context_groups?.length ?? 0}
           </div>
-          <div className="text-[11px] text-[#858D9A] mt-0.5">Connected context groups</div>
+          <div className="text-[11px] text-[#858D9A] mt-1.5 leading-tight">Connected context groups</div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-[#E8EBF1] p-4.5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#858D9A]">Sampled Chunks</span>
-            <div className="w-7 h-7 rounded-lg bg-[#FFF7ED] text-[#EA580C] flex items-center justify-center">
+        {/* Card 4 – Sampled Chunks */}
+        <div className="bg-white rounded-2xl border border-[#E8EBF1] shadow-sm flex flex-col justify-between p-5 min-h-[108px]">
+          <div className="flex items-center justify-between w-full">
+            <span className="text-xs font-semibold text-[#858D9A] leading-tight">Sampled Chunks</span>
+            <div className="w-8 h-8 rounded-xl bg-[#FFF7ED] text-[#EA580C] flex items-center justify-center shrink-0">
               <Database className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-[#202938] mt-2">
+          <div className="text-3xl font-extrabold text-[#202938] leading-none mt-3">
             {data?.total_sampled_chunks ?? 0}
           </div>
-          <div className="text-[11px] text-[#858D9A] mt-0.5">ChromaDB semantic nodes</div>
+          <div className="text-[11px] text-[#858D9A] mt-1.5 leading-tight">ChromaDB semantic nodes</div>
         </div>
       </div>
 
